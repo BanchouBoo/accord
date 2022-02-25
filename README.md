@@ -19,17 +19,17 @@
         - If you don't fill out every array value, the rest will be filled with the defaults
     - Optional array, array of optionals, and optional array of optionals
 - Type settings:
-    - Integers have a `radix` u8 option, defaults to 0.
+    - Integers have a `radix` u8 setting, defaults to 0.
         - A radix of 0 means assume base 10 unless the value starts with:
             - `0b` = binary
             - `0o` = octal
             - `0x` = hex
-    - Floats have a `hex` bool option, defaults to false. Allows you to parse hexadecimal floating point values.
-    - Enums have an `enum_parsing` enum option with the values `name`, `value`, and `both`, defaults to `name`.
-        - `name` means it will try to match the value with the names of the fields in the enum. 
-        - `value` means it will try to match the values of the fields. - 
-        - `both` means it will first try to match the field values, and if that fails it will try to match the field names. Enums also have the integer `radix` option.
-    - Arrays have a `delimiter` string option, defaults to `","`. It will also inherit any settings from it's child type (e.g. an array of enums would also have the `enum_parsing` and `radix` settings available)
+    - Floats have a `hex` bool setting, defaults to false. Allows you to parse hexadecimal floating point values.
+    - Enums have an `enum_parsing` enum setting with the values `name`, `value`, and `both`, defaults to `name`. Enums also have the integer `radix` setting.
+        - `name` means it will try to match the value with the names of the fields in the enum.
+        - `value` means it will try to match the values of the fields.
+        - `both` means it will first try to match the field values, and if that fails it will try to match the field names.
+    - Arrays have a `delimiter` string setting, defaults to `","`. It will also inherit any settings from it's child type (e.g. an array of enums would also have the `enum_parsing` and `radix` settings available)
         - Separator between array values.
 
 ## Example
@@ -59,6 +59,6 @@ would result in the following value:
     .a = true,
     .option = false,
     .intarray = [2]u32{ null, 23 },
-    .positionals = {  "command" "positional1", "positional2", "positional3", "--option" },
+    .positionals = {  "command", "positional1", "positional2", "positional3", "--option" }
 }
 ```
