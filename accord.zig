@@ -160,101 +160,77 @@ const Error = error{
     OptionUnexpectedValue,
 };
 
-// TODO: think about how to rework this so I don't have to pass around unecessary arguments, it's fine for now though
-const ParseFunctions = struct {
-    pub fn runParseFunction(comptime T: type, comptime default: T, comptime settings: anytype, string: []const u8) Error!T {
-        const info = @typeInfo(T);
-        if (@hasDecl(ParseFunctions, @typeName(T)))
-            return @field(ParseFunctions, @typeName(T))(T, default, settings, string)
-        else if (@hasDecl(ParseFunctions, @tagName(info)))
-            return @field(ParseFunctions, @tagName(info))(T, default, settings, string);
-
-        @compileError("Unsupported type '" ++ @typeName(T) ++ "'");
+fn parseValue(comptime T: type, comptime default: T, comptime settings: anytype, string: []const u8) Error!T {
+    const info = @typeInfo(T);
+    switch (T) {
+        []const u8 => return string,
+        bool => {
+            return if (std.ascii.eqlIgnoreCase(string, "true"))
+                true
+            else if (std.ascii.eqlIgnoreCase(string, "false"))
+                false
+            else
+                error.OptionUnexpectedValue;
+        },
+        else => {},
     }
 
-    pub fn @"[]const u8"(comptime T: type, comptime _: T, comptime _: anytype, string: []const u8) T {
-        return string;
+    switch (info) {
+        .Int => return std.fmt.parseInt(T, string, settings.radix) catch error.OptionUnexpectedValue,
+        .Float => {
+            return if (settings.hex)
+                std.fmt.parseHexFloat(T, string) catch error.OptionUnexpectedValue
+            else
+                std.fmt.parseFloat(T, string) catch error.OptionUnexpectedValue;
+        },
+        .Optional => {
+            // gross
+            const d = default orelse @as(info.Optional.child, undefined);
+            return if (std.ascii.eqlIgnoreCase(string, "null"))
+                null
+            else
+                // try is necessary here otherwise there are type errors
+                try parseValue(info.Optional.child, d, settings, string);
+        },
+        .Array => {
+            const ChildT = info.Array.child;
+            var result: T = default;
+            var iterator = std.mem.split(u8, string, settings.delimiter);
+            comptime var i: usize = 0; // iterate with i instead of iterator so default can be indexed
+            inline while (i < result.len) : (i += 1) {
+                const token = iterator.next() orelse break;
+                result[i] = try parseValue(
+                    ChildT,
+                    default[i],
+                    settings,
+                    token,
+                );
+            }
+
+            return result;
+        },
+        .Enum => {
+            const TagT = info.Enum.tag_type;
+            return switch (settings.enum_parsing) {
+                .name => std.meta.stringToEnum(T, string) orelse error.OptionUnexpectedValue,
+                .value => std.meta.intToEnum(T, parseValue(
+                    TagT,
+                    @enumToInt(default),
+                    settings,
+                    string,
+                ) catch return error.OptionUnexpectedValue) catch error.OptionUnexpectedValue,
+                .both => std.meta.intToEnum(T, parseValue(
+                    TagT,
+                    @enumToInt(default),
+                    settings,
+                    string,
+                ) catch {
+                    return std.meta.stringToEnum(T, string) orelse error.OptionUnexpectedValue;
+                }) catch error.OptionUnexpectedValue,
+            };
+        },
+        else => @compileError("Unsupported type '" ++ @typeName(T) ++ "'"),
     }
-
-    pub fn @"bool"(comptime T: type, comptime _: T, comptime _: anytype, string: []const u8) Error!T {
-        return if (std.ascii.eqlIgnoreCase(string, "true"))
-            true
-        else if (std.ascii.eqlIgnoreCase(string, "false"))
-            false
-        else
-            error.OptionUnexpectedValue;
-    }
-
-    pub fn Int(comptime T: type, comptime _: T, comptime settings: anytype, string: []const u8) Error!T {
-        return std.fmt.parseInt(T, string, settings.radix) catch error.OptionUnexpectedValue;
-    }
-
-    pub fn Float(comptime T: type, comptime _: T, comptime settings: anytype, string: []const u8) Error!T {
-        return if (settings.hex)
-            std.fmt.parseHexFloat(T, string) catch error.OptionUnexpectedValue
-        else
-            std.fmt.parseFloat(T, string) catch error.OptionUnexpectedValue;
-    }
-
-    pub fn Optional(comptime T: type, comptime default: T, comptime settings: anytype, string: []const u8) Error!T {
-        const d = default orelse @as(@typeInfo(T).Optional.child, undefined);
-        return if (std.ascii.eqlIgnoreCase(string, "null"))
-            null
-        else
-            // try is necessary here otherwise there are type errors
-            try runParseFunction(@typeInfo(T).Optional.child, d, settings, string);
-    }
-
-    pub fn Array(comptime T: type, comptime default: T, comptime settings: anytype, string: []const u8) Error!T {
-        const info = @typeInfo(T);
-        const ChildT = info.Array.child;
-        var result: T = default;
-        var iterator = std.mem.split(u8, string, settings.delimiter);
-        comptime var i: usize = 0; // iterate with i instead of iterator so default can be indexed
-        inline while (i < result.len) : (i += 1) {
-            const token = iterator.next() orelse break;
-            result[i] = try runParseFunction(
-                ChildT,
-                default[i],
-                settings,
-                token,
-            );
-        }
-
-        return result;
-    }
-
-    pub fn Enum(comptime T: type, comptime default: T, comptime settings: anytype, string: []const u8) Error!T {
-        _ = settings;
-        const info = @typeInfo(T);
-        const TagT = info.Enum.tag_type;
-        return switch (settings.enum_parsing) {
-            .name => std.meta.stringToEnum(T, string) orelse error.OptionUnexpectedValue,
-            .value => std.meta.intToEnum(T, runParseFunction(
-                TagT,
-                @enumToInt(default),
-                settings,
-                string,
-            ) catch return error.OptionUnexpectedValue) catch error.OptionUnexpectedValue,
-            .both => std.meta.intToEnum(T, runParseFunction(
-                TagT,
-                @enumToInt(default),
-                settings,
-                string,
-            ) catch {
-                return std.meta.stringToEnum(T, string) orelse error.OptionUnexpectedValue;
-            }) catch error.OptionUnexpectedValue,
-        };
-    }
-};
-
-fn parseValue(comptime opt: Option, string: []const u8) Error!ValueType(opt.type) {
-    return ParseFunctions.runParseFunction(
-        opt.type,
-        comptime opt.getDefault().*,
-        comptime opt.getSettings(),
-        string,
-    );
 }
 
 pub fn parse(comptime options: []const Option, allocator: std.mem.Allocator, arg_iterator: anytype) !OptionStruct(options) {
@@ -289,7 +265,13 @@ pub fn parse(comptime options: []const Option, allocator: std.mem.Allocator, arg
                             log.err("Option '{s}' missing argument!", .{opt_name});
                             return error.OptionMissingValue;
                         });
-                        @field(values, field_name) = parseValue(opt, vs) catch {
+
+                        @field(values, field_name) = parseValue(
+                            opt.type,
+                            comptime opt.getDefault().*,
+                            comptime opt.getSettings(),
+                            vs,
+                        ) catch {
                             log.err("Could not parse value '{s}' for option '{s}!", .{ vs, opt_name });
                             return error.OptionUnexpectedValue;
                         };
