@@ -9,8 +9,8 @@
 - Positional arguments stored in an unmanaged ArrayList in the returned struct
 - Types:
     - Strings (`[]const u8`)
-    - Signed and unsigend integers
-    - Floats and hex floats
+    - Signed and unsigned integers
+    - Floats
     - Booleans (*must* have `true` or `false` as the value)
     - Flags with no arguments via `void` (or the `accord.Flag` alias for readability)
     - Enums by name, value, or both
@@ -23,7 +23,7 @@
         - A radix of 0 means assume base 10 unless the value starts with:
             - `0b` = binary
             - `0o` = octal
-            - `0x` = hex
+            - `0x` = hexadecimal
     - Floats have a `hex` bool setting, defaults to false. Allows you to parse hexadecimal floating point values.
     - Enums have an `enum_parsing` enum setting with the values `name`, `value`, and `both`, defaults to `name`. Enums also have the integer `radix` setting.
         - `name` means it will try to match the value with the names of the fields in the enum.
