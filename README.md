@@ -35,7 +35,7 @@
 ## Example
 ```zig
 const allocator = std.heap.page_allocator;
-var args_iterator = std.process.args().init();
+var args_iterator = std.process.args();
 const options = try accord.parse(&.{
     accord.option('s', "string", []const u8, "default", .{}),
     accord.option('c', "color", u32, 0x000000, .{ .radix = 16 }),
