@@ -406,8 +406,6 @@ test "argument parsing" {
     try std.testing.expectEqual(options.n, 12000);
     try std.testing.expectEqual(options.o, 16384.0);
     try std.testing.expectEqual(options.p, 0.015625);
-    // for some reason this fails when it shouldn't, but the below tests succeed
-    // try std.testing.expectEqualSlices([]const u8, &[_][]const u8{ "bingus", "bungus", "bongo", "bingo" }, options.q[0..]);
     try std.testing.expectEqualStrings("bingus", options.q[0]);
     try std.testing.expectEqualStrings("bungus", options.q[1]);
     try std.testing.expectEqualStrings("bongo", options.q[2]);
