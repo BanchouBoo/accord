@@ -2,6 +2,22 @@ const std = @import("std");
 
 const StringList = std.ArrayListUnmanaged([]const u8);
 pub const Flag = void;
+pub const PositionalData = struct {
+    items: [][]const u8,
+    separator_index: usize,
+
+    pub fn beforeSeparator(self: PositionalData) [][]const u8 {
+        return self.items[0..self.separator_index];
+    }
+
+    pub fn afterSeparator(self: PositionalData) [][]const u8 {
+        return self.items[self.separator_index..];
+    }
+
+    pub fn deinit(self: PositionalData, allocator: std.mem.Allocator) void {
+        allocator.free(self.items);
+    }
+};
 
 const log = std.log.scoped(.accord);
 
@@ -119,9 +135,15 @@ fn OptionStruct(comptime options: []const Option) type {
 
     struct_fields[options.len] = StructField(
         "positionals",
-        StringList,
+        PositionalData,
         null,
     );
+
+    // struct_fields[options.len + 1] = StructField(
+    //     "positional_separator_index",
+    //     usize,
+    //     null,
+    // );
 
     const struct_info = TypeInfo{ .Struct = .{
         .layout = .Auto,
@@ -237,8 +259,9 @@ fn parseValue(comptime opt: Option, string: []const u8) Error!ValueType(opt.type
 
 pub fn parse(comptime options: []const Option, allocator: std.mem.Allocator, arg_iterator: anytype) !OptionStruct(options) {
     const OptValues = OptionStruct(options);
-    var result = OptValues{ .positionals = StringList{} };
-    errdefer result.positionals.deinit(allocator);
+    var result = OptValues{ .positionals = undefined };
+    var positional_list = StringList{};
+    errdefer positional_list.deinit(allocator);
 
     const Parser = struct {
         pub fn common(comptime long_name: bool, arg_name: []const u8, value_string: ?[]const u8, values: *OptValues, iterator: anytype) Error!void {
@@ -312,13 +335,19 @@ pub fn parse(comptime options: []const Option, allocator: std.mem.Allocator, arg
         if (std.mem.startsWith(u8, arg, "--") and !all_positional) {
             if (arg.len == 2) {
                 all_positional = true;
+                result.positionals.separator_index = positional_list.items.len;
             } else try Parser.long(arg, &result, arg_iterator);
         } else if (std.mem.startsWith(u8, arg, "-") and arg.len > 1 and !all_positional) {
             try Parser.short(arg, &result, arg_iterator);
         } else {
-            try result.positionals.append(allocator, arg);
+            try positional_list.append(allocator, arg);
         }
     }
+
+    positional_list.shrinkAndFree(allocator, positional_list.items.len);
+    result.positionals.items = positional_list.items;
+    if (!all_positional)
+        result.positionals.separator_index = result.positionals.items.len;
 
     return result;
 }
@@ -351,21 +380,31 @@ test "argument parsing" {
     const allocator = std.testing.allocator;
     // zig fmt: off
     const args = [_][]const u8{
+        "positional1",
         "-a", "test arg",
-        "-bcd", "FaLSE",
+        "-b",
+        "positional2",
+        "-cd", "FaLSE",
         "-eff0000",
         "--longf=c",
         "--longg", "1",
+        "positional3",
         "-h1,d,0",
         "-iNUlL",
         "-j", "nULl",
         "-kNULL|10|d",
         "-lnull",
+        "positional4",
         "-m0b00110010",
         "-n", "1.2e4",
         "-o0x10p+10",
+        "positional5",
         "-p0x10p-10",
-        "-q", "bingusDELIMITERbungusDELIMITERbongoDELIMITERbingo"
+        "-q", "bingusDELIMITERbungusDELIMITERbongoDELIMITERbingo",
+        "--",
+        "-r",
+        "positional6",
+        
     };
     // zig fmt: on
     var args_iterator = SliceIterator([]const u8).init(args[0..]);
@@ -388,7 +427,9 @@ test "argument parsing" {
         option('o', "", f64, 0.0, .{ .hex = true }),
         option('p', "", f128, 0.0, .{ .hex = true }),
         option('q', "", [4][]const u8, .{ "", "", "", "" }, .{ .delimiter = "DELIMITER" }),
+        option('r', "", Flag, {}, .{}),
     }, allocator, &args_iterator);
+    defer options.positionals.deinit(allocator);
 
     try std.testing.expectEqualStrings("test arg", options.longa);
     try std.testing.expect(options.b);
@@ -406,8 +447,33 @@ test "argument parsing" {
     try std.testing.expectEqual(options.n, 12000);
     try std.testing.expectEqual(options.o, 16384.0);
     try std.testing.expectEqual(options.p, 0.015625);
-    try std.testing.expectEqualStrings("bingus", options.q[0]);
-    try std.testing.expectEqualStrings("bungus", options.q[1]);
-    try std.testing.expectEqualStrings("bongo", options.q[2]);
-    try std.testing.expectEqualStrings("bingo", options.q[3]);
+    const expected_q = [_][]const u8{ "bingus", "bungus", "bongo", "bingo" };
+    for (expected_q) |string, i| {
+        try std.testing.expectEqualStrings(string, options.q[i]);
+    }
+    const expected_positionals = [_][]const u8{
+        "positional1",
+        "positional2",
+        "positional3",
+        "positional4",
+        "positional5",
+        "-r",
+        "positional6",
+    };
+    for (expected_positionals) |string, i| {
+        try std.testing.expectEqualStrings(string, options.positionals.items[i]);
+    }
+    for (expected_positionals[0..options.positionals.separator_index]) |string, i| {
+        try std.testing.expectEqualStrings(
+            string,
+            options.positionals.beforeSeparator()[i],
+        );
+    }
+    for (expected_positionals[options.positionals.separator_index..]) |string, i| {
+        try std.testing.expectEqualStrings(
+            string,
+            options.positionals.afterSeparator()[i],
+        );
+    }
+    try std.testing.expectEqual(options.r, false);
 }

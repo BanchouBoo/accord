@@ -1,12 +1,13 @@
 # accord
 
 ## Features
-- Automatically generate and fill a struct based on input parameters
-- Short and long options
-- Short options work with both `-a -b -c -d 12` and `-abcd12`
-- Long options work with both `--option long` and `--option=long`
-- Everything after a standalone `--` will be considered a positional argument
-- Positional arguments stored in an unmanaged ArrayList in the returned struct
+- Automatically generate and fill a struct based on input parameters.
+- Short and long options.
+- Short options work with both `-a -b -c -d 12` and `-abcd12`.
+- Long options work with both `--option long` and `--option=long`.
+- Everything after a standalone `--` will be considered a positional argument. The index for this will also be stored, so you can slice the positionals before or after `--` if you want to have a distinction between them.
+- Positional arguments stored in a struct with `items` storing the actual slice, `separator_index` storing the aforementioned index of `--` if it exists, and `beforeSeparator` and `afterSeparator` functions to get the positionals before and after the `--` (if there's no `--`, then before will return everything and after will return nothing).
+    - Positional arguments must be manually freed using `positionals.deinit(allocator)`.
 - Types:
     - Strings (`[]const u8`)
     - Signed and unsigned integers
@@ -48,17 +49,19 @@ defer options.positionals.deinit(allocator);
 ```
 The above example called as
 
-`command positional1 -s"some string" --color ff0000 positional2 -f 1.2e4 -a positional3 --intarray="null|23" -- --option`
+`command positional1 -s"some string" --color ff0000 positional2 -f 1.2e4 -a positional3 --intarray="null|23" -- --option positional4 positional5`
 
 would result in the following value:
 ```zig
 {
-    .string = "some string",
-    .color = 0xff0000,
-    .float = 12000.0,
-    .a = true,
-    .option = false,
-    .intarray = [2]u32{ null, 23 },
-    .positionals = {  "command", "positional1", "positional2", "positional3", "--option" }
+    string = "some string"
+    color = 0xff0000
+    float = 12000.0
+    a = true
+    option = false
+    intarray = { null, 23 }
+    positionals.items = { "command", "positional1", "positional2", "positional3", "--option", "positional4", "positional5" }
+    positionals.beforeSeparator() = { "command", "positional1", "positional2", "positional3" }
+    positionals.afterSeparator() = { "--option", "positional4", "positional5" }
 }
 ```
