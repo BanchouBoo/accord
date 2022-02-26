@@ -44,47 +44,38 @@ fn ValueType(comptime T: type) type {
     };
 }
 
-// TODO: rework this to work similar to value parsing, so I can call into it multiple times to make
-//       optional/array parsing more sane
-pub fn OptionSettings(comptime T: type) type {
+const Field = std.builtin.TypeInfo.StructField;
+fn optionSettingsFields(comptime T: type) []const Field {
     comptime var info = @typeInfo(T);
-    comptime var field_count = 0;
-    comptime var fields: [3]std.builtin.TypeInfo.StructField = undefined;
-    while (info == .Optional) {
-        info = @typeInfo(info.Optional.child);
+    switch (info) {
+        .Int => return &[1]Field{StructField("radix", u8, &@as(u8, 0))},
+        .Float => return &[1]Field{StructField("hex", bool, &false)},
+        .Enum => {
+            const EnumSetting = enum { name, value, both };
+            return optionSettingsFields(info.Enum.tag_type) ++
+                &[1]Field{StructField("enum_parsing", EnumSetting, &EnumSetting.name)};
+        },
+        .Optional => return optionSettingsFields(info.Optional.child),
+        .Array => {
+            // TODO: make them work!
+            if (@typeInfo(info.Array.child) == .Array)
+                @compileError("Multidimensional arrays not yet supported!");
+            const delimiter: []const u8 = ",";
+            return optionSettingsFields(info.Array.child) ++
+                &[1]Field{StructField("delimiter", []const u8, &delimiter)};
+        },
+        else => return &[0]Field{},
     }
-    if (info == .Array) {
-        info = @typeInfo(info.Array.child);
-        // TODO: make them work!
-        if (info == .Array) @compileError("Multidimensional arrays not yet supported!");
-        while (info == .Optional) {
-            info = @typeInfo(info.Optional.child);
-        }
-        const value: []const u8 = ",";
-        fields[field_count] = StructField("delimiter", []const u8, &value);
-        field_count += 1;
-    }
-    if (info == .Enum) {
-        info = @typeInfo(info.Enum.tag_type);
-        const EnumSetting = enum { name, value, both };
-        fields[field_count] = StructField("enum_parsing", EnumSetting, &EnumSetting.name);
-        field_count += 1;
-    }
+}
 
-    if (info == .Int) {
-        fields[field_count] = StructField("radix", u8, &@as(u8, 0));
-        field_count += 1;
-    } else if (info == .Float) {
-        fields[field_count] = StructField("hex", bool, &false);
-        field_count += 1;
-    }
-
-    return if (field_count == 0)
+pub fn OptionSettings(comptime T: type) type {
+    const fields = optionSettingsFields(T);
+    return if (fields.len == 0)
         struct { padding_so_i_can_make_a_non_zero_sized_pointer: u1 = 0 }
     else
         @Type(std.builtin.TypeInfo{ .Struct = .{
             .layout = .Auto,
-            .fields = fields[0..field_count],
+            .fields = fields,
             .decls = &.{},
             .is_tuple = false,
         } });
@@ -97,7 +88,8 @@ pub fn option(
     comptime default: T,
     comptime settings: OptionSettings(T),
 ) Option {
-    if (short == 0 and long.len == 0) @compileError("Must have either a short or long name, cannot have neither!");
+    if (short == 0 and long.len == 0)
+        @compileError("Must have either a short or long name, cannot have neither!");
     return .{
         .short = short,
         .long = long,
