@@ -152,7 +152,7 @@ const Error = error{
     OptionUnexpectedValue,
 };
 
-fn parseValue(comptime T: type, comptime default: T, comptime settings: anytype, string: []const u8) Error!T {
+fn parseValue(comptime T: type, comptime default: ?T, comptime settings: anytype, string: []const u8) Error!T {
     const info = @typeInfo(T);
     switch (T) {
         []const u8 => return string,
@@ -177,7 +177,7 @@ fn parseValue(comptime T: type, comptime default: T, comptime settings: anytype,
         },
         .Optional => {
             // gross
-            const d = default orelse @as(info.Optional.child, undefined);
+            const d = default orelse null;
             return if (std.ascii.eqlIgnoreCase(string, "null"))
                 null
             else
@@ -186,17 +186,21 @@ fn parseValue(comptime T: type, comptime default: T, comptime settings: anytype,
         },
         .Array => {
             const ChildT = info.Array.child;
-            var result: T = default;
+            var result: T = default orelse undefined;
             var iterator = std.mem.split(u8, string, settings.delimiter);
             comptime var i: usize = 0; // iterate with i instead of iterator so default can be indexed
             inline while (i < result.len) : (i += 1) {
                 const token = iterator.next() orelse break;
                 result[i] = try parseValue(
                     ChildT,
-                    default[i],
+                    if (default) |d| d[i] else null,
                     settings,
                     token,
                 );
+            }
+            if (i != result.len and default == null) {
+                log.err("Optional arrays that have a default value of null must have every value filled out!", .{});
+                return error.OptionUnexpectedValue;
             }
 
             return result;
@@ -207,13 +211,13 @@ fn parseValue(comptime T: type, comptime default: T, comptime settings: anytype,
                 .name => std.meta.stringToEnum(T, string) orelse error.OptionUnexpectedValue,
                 .value => std.meta.intToEnum(T, parseValue(
                     TagT,
-                    @enumToInt(default),
+                    if (default) |d| @enumToInt(d) else null,
                     settings,
                     string,
                 ) catch return error.OptionUnexpectedValue) catch error.OptionUnexpectedValue,
                 .both => std.meta.intToEnum(T, parseValue(
                     TagT,
-                    @enumToInt(default),
+                    if (default) |d| @enumToInt(d) else null,
                     settings,
                     string,
                 ) catch {
@@ -364,9 +368,9 @@ test "argument parsing" {
         "--longg", "1",
         "positional3",
         "-h1,d,0",
-        "-iNUlL",
-        "-j", "nULl",
-        "-kNULL|10|d",
+        "-ib",
+        "-j", "d,a,b",
+        "-k10|NULL|d",
         "-lnull",
         "positional4",
         "-m0b00110010",
@@ -375,10 +379,10 @@ test "argument parsing" {
         "positional5",
         "-p0x10p-10",
         "-q", "bingusDELIMITERbungusDELIMITERbongoDELIMITERbingo",
+        "-r", "bujungo",
         "--",
-        "-r",
+        "-s",
         "positional6",
-        
     };
     // zig fmt: on
     var args_iterator = SliceIterator([]const u8).init(args[0..]);
@@ -392,16 +396,17 @@ test "argument parsing" {
         option('f', "longf", TestEnum, .a, .{}),
         option('g', "longg", TestEnum, .a, .{ .enum_parsing = .value }),
         option('h', "", [3]TestEnum, .{ .a, .a, .a }, .{ .enum_parsing = .both }),
-        option('i', "", ?TestEnum, .a, .{}),
-        option('j', "", ?[3]TestEnum, .{ .a, .a, .a }, .{}),
-        option('k', "", [3]?TestEnum, .{ .a, .a, .a }, .{ .enum_parsing = .both, .delimiter = "|", .radix = 2 }),
+        option('i', "", ?TestEnum, null, .{}),
+        option('j', "", ?[3]TestEnum, null, .{}),
+        option('k', "", [3]?TestEnum, .{ null, .a, .a }, .{ .enum_parsing = .both, .delimiter = "|", .radix = 2 }),
         option('l', "", ?[3]?TestEnum, .{ .a, .a, .a }, .{}),
         option('m', "", u8, 0, .{}),
         option('n', "", f32, 0.0, .{}),
         option('o', "", f64, 0.0, .{ .hex = true }),
         option('p', "", f128, 0.0, .{ .hex = true }),
         option('q', "", [4][]const u8, .{ "", "", "", "" }, .{ .delimiter = "DELIMITER" }),
-        option('r', "", Flag, {}, .{}),
+        option('r', "", ?[]const u8, null, .{}),
+        option('s', "", Flag, {}, .{}),
     }, allocator, &args_iterator);
     defer options.positionals.deinit(allocator);
 
@@ -413,9 +418,9 @@ test "argument parsing" {
     try std.testing.expectEqual(options.longf, .c);
     try std.testing.expectEqual(options.longg, .b);
     try std.testing.expectEqualSlices(TestEnum, &.{ .b, .d, .a }, options.h[0..]);
-    try std.testing.expectEqual(options.i, null);
-    try std.testing.expectEqual(options.j, null);
-    try std.testing.expectEqualSlices(?TestEnum, &.{ null, .c, .d }, options.k[0..]);
+    try std.testing.expectEqual(options.i, .b);
+    try std.testing.expectEqual(options.j, .{ .d, .a, .b });
+    try std.testing.expectEqualSlices(?TestEnum, &.{ .c, null, .d }, options.k[0..]);
     try std.testing.expectEqual(options.l, null);
     try std.testing.expectEqual(options.m, 50);
     try std.testing.expectEqual(options.n, 12000);
@@ -425,13 +430,14 @@ test "argument parsing" {
     for (expected_q) |string, i| {
         try std.testing.expectEqualStrings(string, options.q[i]);
     }
+    try std.testing.expectEqualStrings(options.r.?, "bujungo");
     const expected_positionals = [_][]const u8{
         "positional1",
         "positional2",
         "positional3",
         "positional4",
         "positional5",
-        "-r",
+        "-s",
         "positional6",
     };
     for (expected_positionals) |string, i| {
@@ -449,5 +455,5 @@ test "argument parsing" {
             options.positionals.afterSeparator()[i],
         );
     }
-    try std.testing.expectEqual(options.r, false);
+    try std.testing.expectEqual(options.s, false);
 }
