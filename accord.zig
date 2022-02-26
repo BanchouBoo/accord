@@ -176,7 +176,6 @@ fn parseValue(comptime T: type, comptime default: ?T, comptime settings: anytype
                 std.fmt.parseFloat(T, string) catch error.OptionUnexpectedValue;
         },
         .Optional => {
-            // gross
             const d = default orelse null;
             return if (std.ascii.eqlIgnoreCase(string, "null"))
                 null
