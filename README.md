@@ -65,3 +65,16 @@ would result in the following value:
     positionals.afterSeparator() = { "--option", "positional4", "positional5" }
 }
 ```
+
+## Possible things to add in the future
+- Multidimensional arrays
+    - I have a few ideas about how I could do this, would possibly require a bit of restructuring and I'm not sure if it'd be worth the effort
+- Unions
+    - Sort the fields by type, parse for each type until one of them succeeds.
+    - Potential issues/considerations:
+        - If there are two optional types in the union, and the parse value is `null`, which field should be set?
+            - Perhaps it doesn't make sense to support optionals for unions anyway, since you could instead make the union itself an optional
+        - Multiple fields of the same type (probably not a a big deal though? more of a user error if you try and do this, perhaps I could add a compiler error to prevent it though)
+        - Should I ensure that every field in a union is a valid, parseable field?
+        - How should enums prioritize relative to integers when parsing by value?
+        - Does it make sense to allow multiple similar types, e.g. multiple unsigned integers, multiple signed integers, multiple floats
