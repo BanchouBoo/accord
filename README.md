@@ -79,3 +79,6 @@ would result in the following value:
         - Should I ensure that every field in a union is a valid, parseable field?
         - How should enums prioritize relative to integers when parsing by value?
         - Does it make sense to allow multiple similar types, e.g. multiple unsigned integers, multiple signed integers, multiple floats
+- Special mask type
+    - A type generated from an int or enum that parses a delimited list of that type and bitwise ORs them together.
+    - Default delimiter `|` to match the actual operator
