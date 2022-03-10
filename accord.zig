@@ -48,12 +48,12 @@ const Field = std.builtin.TypeInfo.StructField;
 fn optionSettingsFields(comptime T: type) []const Field {
     comptime var info = @typeInfo(T);
     switch (info) {
-        .Int => return &[1]Field{StructField("radix", u8, &@as(u8, 0))},
-        .Float => return &[1]Field{StructField("hex", bool, &false)},
+        .Int => return &[1]Field{structField("radix", u8, &@as(u8, 0))},
+        .Float => return &[1]Field{structField("hex", bool, &false)},
         .Enum => {
             const EnumSetting = enum { name, value, both };
             return optionSettingsFields(info.Enum.tag_type) ++
-                &[1]Field{StructField("enum_parsing", EnumSetting, &EnumSetting.name)};
+                &[1]Field{structField("enum_parsing", EnumSetting, &EnumSetting.name)};
         },
         .Optional => return optionSettingsFields(info.Optional.child),
         .Array => {
@@ -62,7 +62,7 @@ fn optionSettingsFields(comptime T: type) []const Field {
                 @compileError("Multidimensional arrays not yet supported!");
             const delimiter: []const u8 = ",";
             return optionSettingsFields(info.Array.child) ++
-                &[1]Field{StructField("delimiter", []const u8, &delimiter)};
+                &[1]Field{structField("delimiter", []const u8, &delimiter)};
         },
         else => return &[0]Field{},
     }
@@ -99,7 +99,7 @@ pub fn option(
     };
 }
 
-fn StructField(
+fn structField(
     comptime name: []const u8,
     comptime T: type,
     comptime default: ?*const T,
@@ -113,19 +113,19 @@ fn StructField(
     };
 }
 
-fn OptionStruct(comptime options: []const Option) type {
+pub fn OptionStruct(comptime options: []const Option) type {
     const TypeInfo = std.builtin.TypeInfo;
     comptime var struct_fields: [options.len + 1]TypeInfo.StructField = undefined;
 
     for (options) |opt, i| {
-        struct_fields[i] = StructField(
+        struct_fields[i] = structField(
             if (opt.long.len > 0) opt.long else &[1]u8{opt.short},
             ValueType(opt.type),
             opt.getDefault(),
         );
     }
 
-    struct_fields[options.len] = StructField(
+    struct_fields[options.len] = structField(
         "positionals",
         PositionalData,
         null,
@@ -189,6 +189,7 @@ fn parseValue(comptime T: type, comptime default: ?T, comptime settings: anytype
             var iterator = std.mem.split(u8, string, settings.delimiter);
             comptime var i: usize = 0; // iterate with i instead of iterator so default can be indexed
             inline while (i < result.len) : (i += 1) {
+                // TODO: if token length == 0, grab default value instead
                 const token = iterator.next() orelse break;
                 result[i] = try parseValue(
                     ChildT,
