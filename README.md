@@ -82,3 +82,7 @@ would result in the following value:
 - Special mask type
     - A type generated from an int or enum that parses a delimited list of that type and bitwise ORs them together.
     - Default delimiter `|` to match the actual operator
+- Definable prefix for short and long arguments, instead of forcing `--`.
+    - This could include an empty prefix, allowing you to do things like `command option value`
+    - Ensure short and long prefixes are different
+    - If short prefix > long prefix, check short prefix first
