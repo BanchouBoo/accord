@@ -26,7 +26,6 @@ NOTE: Accord was made for use with zig master, it will not work on 0.9.1 or olde
             - `0b` = binary
             - `0o` = octal
             - `0x` = hexadecimal
-    - Floats have a `hex` bool setting, defaults to false. Allows you to parse hexadecimal floating point values.
     - Enums have an `enum_parsing` enum setting with the values `name`, `value`, and `both`, defaults to `name`. Enums also have the integer `radix` setting.
         - `name` means it will try to match the value with the names of the fields in the enum.
         - `value` means it will try to match the values of the fields.

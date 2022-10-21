@@ -29,11 +29,11 @@ pub const Option = struct {
     settings: *const anyopaque,
 
     pub fn getDefault(comptime self: Option) *const ValueType(self.type) {
-        return @ptrCast(*const ValueType(self.type), self.default);
+        return @ptrCast(*const ValueType(self.type), @alignCast(@alignOf(ValueType(self.type)), self.default));
     }
 
     pub fn getSettings(comptime self: Option) *const OptionSettings(self.type) {
-        return @ptrCast(*const OptionSettings(self.type), self.settings);
+        return @ptrCast(*const OptionSettings(self.type), @alignCast(@alignOf(OptionSettings(self.type)), self.settings));
     }
 };
 
@@ -44,12 +44,11 @@ fn ValueType(comptime T: type) type {
     };
 }
 
-const Field = std.builtin.TypeInfo.StructField;
+const Field = std.builtin.Type.StructField;
 fn optionSettingsFields(comptime T: type) []const Field {
     comptime var info = @typeInfo(T);
     switch (info) {
         .Int => return &[1]Field{structField("radix", u8, &@as(u8, 0))},
-        .Float => return &[1]Field{structField("hex", bool, &false)},
         .Enum => {
             const EnumSetting = enum { name, value, both };
             return optionSettingsFields(info.Enum.tag_type) ++
@@ -73,7 +72,7 @@ pub fn OptionSettings(comptime T: type) type {
     return if (fields.len == 0)
         struct { padding_so_i_can_make_a_non_zero_sized_pointer: u1 = 0 }
     else
-        @Type(std.builtin.TypeInfo{ .Struct = .{
+        @Type(std.builtin.Type{ .Struct = .{
             .layout = .Auto,
             .fields = fields,
             .decls = &.{},
@@ -94,7 +93,7 @@ pub fn option(
         .short = short,
         .long = long,
         .type = T,
-        .default = if (T == void) &false else &default,
+        .default = if (T == void) &false else @ptrCast(*const anyopaque, &default),
         .settings = &settings,
     };
 }
@@ -103,19 +102,19 @@ fn structField(
     comptime name: []const u8,
     comptime T: type,
     comptime default: ?*const T,
-) std.builtin.TypeInfo.StructField {
+) std.builtin.Type.StructField {
     return .{
         .name = name,
         .field_type = T,
-        .default_value = default,
+        .default_value = @ptrCast(?*const anyopaque, default),
         .is_comptime = false,
         .alignment = @alignOf(T),
     };
 }
 
 pub fn OptionStruct(comptime options: []const Option) type {
-    const TypeInfo = std.builtin.TypeInfo;
-    comptime var struct_fields: [options.len + 1]TypeInfo.StructField = undefined;
+    const Type = std.builtin.Type;
+    comptime var struct_fields: [options.len + 1]Type.StructField = undefined;
 
     for (options) |opt, i| {
         struct_fields[i] = structField(
@@ -131,13 +130,7 @@ pub fn OptionStruct(comptime options: []const Option) type {
         null,
     );
 
-    // struct_fields[options.len + 1] = StructField(
-    //     "positional_separator_index",
-    //     usize,
-    //     null,
-    // );
-
-    const struct_info = TypeInfo{ .Struct = .{
+    const struct_info = Type{ .Struct = .{
         .layout = .Auto,
         .fields = &struct_fields,
         .decls = &.{},
@@ -146,13 +139,13 @@ pub fn OptionStruct(comptime options: []const Option) type {
     return @Type(struct_info);
 }
 
-const Error = error{
+const AccordError = error{
     UnrecognizedOption,
     OptionMissingValue,
     OptionUnexpectedValue,
 };
 
-fn parseValue(comptime T: type, comptime default: ?T, comptime settings: anytype, string: []const u8) Error!T {
+fn parseValue(comptime T: type, comptime default: ?T, comptime settings: anytype, string: []const u8) AccordError!T {
     const info = @typeInfo(T);
     switch (T) {
         []const u8 => return string,
@@ -170,10 +163,7 @@ fn parseValue(comptime T: type, comptime default: ?T, comptime settings: anytype
     switch (info) {
         .Int => return std.fmt.parseInt(T, string, settings.radix) catch error.OptionUnexpectedValue,
         .Float => {
-            return if (settings.hex)
-                std.fmt.parseHexFloat(T, string) catch error.OptionUnexpectedValue
-            else
-                std.fmt.parseFloat(T, string) catch error.OptionUnexpectedValue;
+            return std.fmt.parseFloat(T, string) catch error.OptionUnexpectedValue;
         },
         .Optional => {
             const d = default orelse null;
@@ -236,7 +226,7 @@ pub fn parse(comptime options: []const Option, allocator: std.mem.Allocator, arg
     errdefer positional_list.deinit(allocator);
 
     const Parser = struct {
-        pub fn common(comptime long_name: bool, arg_name: []const u8, value_string: ?[]const u8, values: *OptValues, iterator: anytype) Error!void {
+        pub fn common(comptime long_name: bool, arg_name: []const u8, value_string: ?[]const u8, values: *OptValues, iterator: anytype) AccordError!void {
             inline for (options) |opt| {
                 const opt_name = if (long_name) opt.long else &[1]u8{opt.short};
                 if (std.mem.eql(u8, arg_name, opt_name)) {
@@ -283,7 +273,7 @@ pub fn parse(comptime options: []const Option, allocator: std.mem.Allocator, arg
             }
         }
 
-        pub fn long(arg: []const u8, values: *OptValues, iterator: anytype) Error!void {
+        pub fn long(arg: []const u8, values: *OptValues, iterator: anytype) AccordError!void {
             const index = std.mem.indexOf(u8, arg, "=");
             var arg_name: []const u8 = undefined;
             var value_string: ?[]const u8 = undefined;
@@ -292,12 +282,13 @@ pub fn parse(comptime options: []const Option, allocator: std.mem.Allocator, arg
                 value_string = arg[i + 1 ..];
             } else {
                 arg_name = arg[2..];
+                value_string = null;
             }
 
             try common(true, arg_name, value_string, values, iterator);
         }
 
-        pub fn short(arg: []const u8, values: *OptValues, iterator: anytype) Error!void {
+        pub fn short(arg: []const u8, values: *OptValues, iterator: anytype) AccordError!void {
             const arg_name = &[1]u8{arg[1]};
             const value_string = if (arg.len > 2)
                 arg[2..]
@@ -402,8 +393,8 @@ test "argument parsing" {
         option('l', "", ?[3]?TestEnum, .{ .a, .a, .a }, .{}),
         option('m', "", u8, 0, .{}),
         option('n', "", f32, 0.0, .{}),
-        option('o', "", f64, 0.0, .{ .hex = true }),
-        option('p', "", f128, 0.0, .{ .hex = true }),
+        option('o', "", f64, 0.0, .{}),
+        option('p', "", f128, 0.0, .{}),
         option('q', "", [4][]const u8, .{ "", "", "", "" }, .{ .delimiter = "DELIMITER" }),
         option('r', "", ?[]const u8, null, .{}),
         option('s', "", Flag, {}, .{}),
