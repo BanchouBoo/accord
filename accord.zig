@@ -161,7 +161,12 @@ fn parseValue(comptime T: type, comptime default: ?T, comptime settings: anytype
     }
 
     switch (info) {
-        .Int => return std.fmt.parseInt(T, string, settings.radix) catch error.OptionUnexpectedValue,
+        .Int => {
+            return if (settings.radix == 16)
+                std.fmt.parseInt(T, std.mem.trimLeft(u8, string, "#"), settings.radix) catch error.OptionUnexpectedValue
+            else
+                std.fmt.parseInt(T, string, settings.radix) catch error.OptionUnexpectedValue;
+        },
         .Float => {
             return std.fmt.parseFloat(T, string) catch error.OptionUnexpectedValue;
         },
