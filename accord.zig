@@ -105,7 +105,7 @@ fn structField(
 ) std.builtin.Type.StructField {
     return .{
         .name = name,
-        .field_type = T,
+        .type = T,
         .default_value = @ptrCast(?*const anyopaque, default),
         .is_comptime = false,
         .alignment = @alignOf(T),
