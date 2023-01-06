@@ -145,7 +145,7 @@ const AccordError = error{
     OptionUnexpectedValue,
 };
 
-fn parseValue(comptime T: type, comptime default: ?T, comptime settings: anytype, string: []const u8) AccordError!T {
+pub fn parseValue(comptime T: type, comptime default: ?T, comptime settings: anytype, string: []const u8) AccordError!T {
     const info = @typeInfo(T);
     switch (T) {
         []const u8 => return string,
