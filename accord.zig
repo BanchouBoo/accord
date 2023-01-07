@@ -2,6 +2,20 @@ const std = @import("std");
 
 const StringList = std.ArrayListUnmanaged([]const u8);
 pub const Flag = void;
+pub fn Mask(comptime T: type) type {
+    const T_info = @typeInfo(T);
+    // zig naming conventions are broken here intentionally
+    return struct {
+        pub const TYPE = T;
+        pub const IS_MASK = true;
+        pub const IS_ENUM = T_info == .Enum;
+        pub const INT_TYPE = if (T_info == .Enum) T_info.Enum.tag_type else T;
+    };
+}
+fn isMask(comptime T: type) bool {
+    return @hasDecl(T, "IS_MASK") and T.IS_MASK;
+}
+
 pub const PositionalData = struct {
     items: [][]const u8,
     separator_index: usize,
@@ -38,10 +52,21 @@ pub const Option = struct {
 };
 
 fn ValueType(comptime T: type) type {
-    return switch (T) {
-        void => bool,
+    const info = @typeInfo(T);
+    return switch (@typeInfo(T)) {
+        .Void => bool,
+        .Array => @Type(.{ .Array = .{
+            .len = info.Array.len,
+            .child = ValueType(info.Array.child),
+            .sentinel = info.Array.sentinel,
+        } }),
+        .Struct => if (isMask(T)) T.TYPE else T,
         else => T,
     };
+}
+
+fn DefaultValueType(comptime T: type) type {
+    return if (T == void) T else ValueType(T);
 }
 
 const Field = std.builtin.Type.StructField;
@@ -61,8 +86,13 @@ fn optionSettingsFields(comptime T: type) []const Field {
                 @compileError("Multidimensional arrays not yet supported!");
             const delimiter: []const u8 = ",";
             return optionSettingsFields(info.Array.child) ++
-                &[1]Field{structField("delimiter", []const u8, &delimiter)};
+                &[1]Field{structField("array_delimiter", []const u8, &delimiter)};
         },
+        .Struct => if (isMask(T)) {
+            const delimiter: []const u8 = "|";
+            return optionSettingsFields(T.TYPE) ++
+                &[1]Field{structField("mask_delimiter", []const u8, &delimiter)};
+        } else return &[0]Field{},
         else => return &[0]Field{},
     }
 }
@@ -84,7 +114,7 @@ pub fn option(
     comptime short: u8,
     comptime long: []const u8,
     comptime T: type,
-    comptime default: T,
+    comptime default: DefaultValueType(T),
     comptime settings: OptionSettings(T),
 ) Option {
     if (short == 0 and long.len == 0)
@@ -93,7 +123,7 @@ pub fn option(
         .short = short,
         .long = long,
         .type = T,
-        .default = if (T == void) &false else @ptrCast(*const anyopaque, &default),
+        .default = if (T == Flag) &false else @ptrCast(*const anyopaque, &default),
         .settings = &settings,
     };
 }
@@ -145,7 +175,7 @@ const AccordError = error{
     OptionUnexpectedValue,
 };
 
-pub fn parseValue(comptime T: type, comptime default: ?T, comptime settings: anytype, string: []const u8) AccordError!T {
+pub fn parseValue(comptime T: type, comptime default: ?DefaultValueType(T), comptime settings: anytype, string: []const u8) AccordError!ValueType(T) {
     const info = @typeInfo(T);
     switch (T) {
         []const u8 => return string,
@@ -178,10 +208,11 @@ pub fn parseValue(comptime T: type, comptime default: ?T, comptime settings: any
                 // try is necessary here otherwise there are type errors
                 try parseValue(info.Optional.child, d, settings, string);
         },
+        // TODO: consider requiring every part of an array to be filled out instead of allowing just some values to be filled
         .Array => {
             const ChildT = info.Array.child;
-            var result: T = default orelse undefined;
-            var iterator = std.mem.split(u8, string, settings.delimiter);
+            var result: ValueType(T) = default orelse undefined;
+            var iterator = std.mem.split(u8, string, settings.array_delimiter);
             comptime var i: usize = 0; // iterate with i instead of iterator so default can be indexed
             inline while (i < result.len) : (i += 1) {
                 // TODO: if token length == 0, grab default value instead
@@ -220,6 +251,20 @@ pub fn parseValue(comptime T: type, comptime default: ?T, comptime settings: any
                 }) catch error.OptionUnexpectedValue,
             };
         },
+        .Struct => if (comptime isMask(T)) {
+            var result: T.INT_TYPE = 0;
+            var iterator = std.mem.split(u8, string, settings.mask_delimiter);
+            while (iterator.next()) |value| {
+                result |= if (T.IS_ENUM)
+                    @enumToInt(try parseValue(T.TYPE, null, settings, value))
+                else
+                    try parseValue(T.TYPE, null, settings, value);
+            }
+            return if (T.IS_ENUM)
+                std.meta.intToEnum(T.TYPE, result) catch error.OptionUnexpectedValue
+            else
+                result;
+        } else @compileError("Unsupported type '" ++ @typeName(T) ++ "'"),
         else => @compileError("Unsupported type '" ++ @typeName(T) ++ "'"),
     }
 }
@@ -236,7 +281,7 @@ pub fn parse(comptime options: []const Option, allocator: std.mem.Allocator, arg
                 const opt_name = if (long_name) opt.long else &[1]u8{opt.short};
                 if (std.mem.eql(u8, arg_name, opt_name)) {
                     const field_name = if (opt.long.len > 0) opt.long else &[1]u8{opt.short};
-                    if (opt.type == void) {
+                    if (opt.type == Flag) {
                         if (value_string != null and value_string.?.len > 0) {
                             if (long_name) {
                                 log.err("Option '{s}' does not take an argument!", .{opt_name});
@@ -376,8 +421,9 @@ test "argument parsing" {
         "-p0x10p-10",
         "-q", "bingusDELIMITERbungusDELIMITERbongoDELIMITERbingo",
         "-r", "bujungo",
+        "-s", "1110|0110",
         "--",
-        "-s",
+        "-t",
         "positional6",
     };
     // zig fmt: on
@@ -394,15 +440,16 @@ test "argument parsing" {
         option('h', "", [3]TestEnum, .{ .a, .a, .a }, .{ .enum_parsing = .both }),
         option('i', "", ?TestEnum, null, .{}),
         option('j', "", ?[3]TestEnum, null, .{}),
-        option('k', "", [3]?TestEnum, .{ null, .a, .a }, .{ .enum_parsing = .both, .delimiter = "|", .radix = 2 }),
+        option('k', "", [3]?TestEnum, .{ null, .a, .a }, .{ .enum_parsing = .both, .array_delimiter = "|", .radix = 2 }),
         option('l', "", ?[3]?TestEnum, .{ .a, .a, .a }, .{}),
         option('m', "", u8, 0, .{}),
         option('n', "", f32, 0.0, .{}),
         option('o', "", f64, 0.0, .{}),
         option('p', "", f128, 0.0, .{}),
-        option('q', "", [4][]const u8, .{ "", "", "", "" }, .{ .delimiter = "DELIMITER" }),
+        option('q', "", [4][]const u8, .{ "", "", "", "" }, .{ .array_delimiter = "DELIMITER" }),
         option('r', "", ?[]const u8, null, .{}),
-        option('s', "", Flag, {}, .{}),
+        option('s', "", Mask(u8), 0, .{ .radix = 2 }),
+        option('t', "", Flag, {}, .{}),
     }, allocator, &args_iterator);
     defer options.positionals.deinit(allocator);
 
@@ -427,13 +474,14 @@ test "argument parsing" {
         try std.testing.expectEqualStrings(string, options.q[i]);
     }
     try std.testing.expectEqualStrings(options.r.?, "bujungo");
+    try std.testing.expectEqual(options.s, 0b1110);
     const expected_positionals = [_][]const u8{
         "positional1",
         "positional2",
         "positional3",
         "positional4",
         "positional5",
-        "-s",
+        "-t",
         "positional6",
     };
     for (expected_positionals) |string, i| {
@@ -451,5 +499,5 @@ test "argument parsing" {
             options.positionals.afterSeparator()[i],
         );
     }
-    try std.testing.expectEqual(options.s, false);
+    try std.testing.expectEqual(options.t, false);
 }

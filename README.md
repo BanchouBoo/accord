@@ -16,9 +16,11 @@ NOTE: Accord was made for use with zig master, it will not work on 0.9.1 or olde
     - Booleans (*must* have `true` or `false` as the value)
     - Flags with no arguments via `void` (or the `accord.Flag` alias for readability)
     - Enums by name, value, or both
-    - Optionals of any of these types (except `void`)
-    - Array of any of these types (except `void`)
-        - If you don't fill out every array value, the rest will be filled with the defaults
+    - Optionals of any of these types (except `Flag`)
+    - Mask type via `accord.Mask(INT OR ENUM TYPE)`
+        - Takes a delimited list of ints/enums and bitwise ORs them together
+    - Array of any of these types (except `Flag`)
+        - If you don't fill out every array value, the rest will be filled with the defaults (maybe it should be an error instead? need to think on it)
     - Optional array, array of optionals, and optional array of optionals
 - Type settings:
     - Integers have a `radix` u8 setting, defaults to 0.
@@ -26,12 +28,11 @@ NOTE: Accord was made for use with zig master, it will not work on 0.9.1 or olde
             - `0b` = binary
             - `0o` = octal
             - `0x` = hexadecimal
-    - Enums have an `enum_parsing` enum setting with the values `name`, `value`, and `both`, defaults to `name`. Enums also have the integer `radix` setting.
+    - Enums have an `enum_parsing` enum setting with the values `name`, `value`, and `both`, defaults to `name`. Enums also have the integer `radix` setting for parsing by `value`.
         - `name` means it will try to match the value with the names of the fields in the enum.
         - `value` means it will try to match the values of the fields.
         - `both` means it will first try to match the field values, and if that fails it will try to match the field names.
-    - Arrays have a `delimiter` string setting, defaults to `","`. It will also inherit any settings from it's child type (e.g. an array of enums would also have the `enum_parsing` and `radix` settings available)
-        - Separator between array values.
+    - Arrays and masks have an `array_delimiter` and `mask_delimiter` string setting respectively, defaults to `","` for arrays and `"|"` for masks. They will also inherit any settings from their child type (e.g. an array or mask of enums would also have the `enum_parsing` and `radix` settings available)
 
 ## Example
 ```zig
@@ -41,15 +42,16 @@ const options = try accord.parse(&.{
     accord.option('s', "string", []const u8, "default", .{}),
     accord.option('c', "color", u32, 0x000000, .{ .radix = 16 }),
     accord.option('f', "float", f32, 0.0, .{}),
+    accord.option('m', "mask", accord.Mask(u8), 0, .{}),
     accord.option('a', "", accord.Flag, {}, .{}), // option without long option
     accord.option(0, "option", accord.Flag, {}, .{}), // option without short option
-    accord.option('i', "intarray", [2]?u32, .{ 0, 0 }, .{ .delimiter = "|" }),
+    accord.option('i', "intarray", [2]?u32, .{ 0, 0 }, .{ .array_delimiter = "%" }),
 }, allocator, &args_iterator);
 defer options.positionals.deinit(allocator);
 ```
 The above example called as
 
-`command positional1 -s"some string" --color ff0000 positional2 -f 1.2e4 -a positional3 --intarray="null|23" -- --option positional4 positional5`
+`command positional1 -s"some string" --color ff0000 positional2 -f 1.2e4 --mask="2|3" -a positional3 --intarray="null%23" -- --option positional4 positional5`
 
 would result in the following value:
 ```zig
@@ -57,6 +59,7 @@ would result in the following value:
     string = "some string"
     color = 0xff0000
     float = 12000.0
+    mask = 3
     a = true
     option = false
     intarray = { null, 23 }
@@ -74,14 +77,15 @@ would result in the following value:
     - Potential issues/considerations:
         - If there are two optional types in the union, and the parse value is `null`, which field should be set?
             - Perhaps it doesn't make sense to support optionals for unions anyway, since you could instead make the union itself an optional
-        - Multiple fields of the same type (probably not a a big deal though? more of a user error if you try and do this, perhaps I could add a compiler error to prevent it though)
+        - Multiple fields of the same type (is there a reason you would do this? if not it can just be a compiler error to do so)
         - Should I ensure that every field in a union is a valid, parseable field?
         - How should enums prioritize relative to integers when parsing by value?
         - Does it make sense to allow multiple similar types, e.g. multiple unsigned integers, multiple signed integers, multiple floats
-- Special mask type
-    - A type generated from an int or enum that parses a delimited list of that type and bitwise ORs them together.
-    - Default delimiter `|` to match the actual operator
+    - probably not worth the effort
 - Definable prefix for short and long arguments, instead of forcing `--`.
     - This could include an empty prefix, allowing you to do things like `command option value`
     - Ensure short and long prefixes are different
     - If short prefix > long prefix, check short prefix first
+        - or make it an error for short to be greater than long
+- More and/or customizable acceptable values for bools
+    - e.g. yes/no, 1/2, t/f, etc
