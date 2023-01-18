@@ -261,7 +261,10 @@ pub fn parseValue(comptime T: type, comptime default: ?DefaultValueType(T), comp
                     try parseValue(T.TYPE, null, settings, value);
             }
             return if (T.IS_ENUM)
-                std.meta.intToEnum(T.TYPE, result) catch error.OptionUnexpectedValue
+                if (@typeInfo(T.TYPE).Enum.is_exhaustive)
+                    std.meta.intToEnum(T.TYPE, result) catch error.OptionUnexpectedValue
+                else
+                    @intToEnum(T.TYPE, result)
             else
                 result;
         } else @compileError("Unsupported type '" ++ @typeName(T) ++ "'"),
