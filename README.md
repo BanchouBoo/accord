@@ -1,5 +1,5 @@
 # accord
-NOTE: Accord was made for use with zig master, it will not work on 0.9.1 or older versions.
+NOTE: Accord was made for use with zig master, it is not guaranteed to and likely will not work on release versions
 
 ## Features
 - Automatically generate and fill a struct based on input parameters.
