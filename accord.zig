@@ -146,7 +146,7 @@ pub fn OptionStruct(comptime options: []const Option) type {
     const Type = std.builtin.Type;
     comptime var struct_fields: [options.len + 1]Type.StructField = undefined;
 
-    for (options) |opt, i| {
+    for (options, 0..) |opt, i| {
         struct_fields[i] = structField(
             if (opt.long.len > 0) opt.long else &[1]u8{opt.short},
             ValueType(opt.type),
@@ -473,8 +473,8 @@ test "argument parsing" {
     try std.testing.expectEqual(options.o, 16384.0);
     try std.testing.expectEqual(options.p, 0.015625);
     const expected_q = [_][]const u8{ "bingus", "bungus", "bongo", "bingo" };
-    for (expected_q) |string, i| {
-        try std.testing.expectEqualStrings(string, options.q[i]);
+    for (expected_q, options.q) |expected, actual| {
+        try std.testing.expectEqualStrings(expected, actual);
     }
     try std.testing.expectEqualStrings(options.r.?, "bujungo");
     try std.testing.expectEqual(options.s, 0b1110);
@@ -487,20 +487,18 @@ test "argument parsing" {
         "-t",
         "positional6",
     };
-    for (expected_positionals) |string, i| {
-        try std.testing.expectEqualStrings(string, options.positionals.items[i]);
+    for (expected_positionals, options.positionals.items) |expected, actual| {
+        try std.testing.expectEqualStrings(expected, actual);
     }
-    for (expected_positionals[0..options.positionals.separator_index]) |string, i| {
-        try std.testing.expectEqualStrings(
-            string,
-            options.positionals.beforeSeparator()[i],
-        );
+    const expected_positionals_before = expected_positionals[0..5];
+    const actual_positionals_before = options.positionals.beforeSeparator();
+    for (expected_positionals_before, actual_positionals_before) |expected, actual| {
+        try std.testing.expectEqualStrings(expected, actual);
     }
-    for (expected_positionals[options.positionals.separator_index..]) |string, i| {
-        try std.testing.expectEqualStrings(
-            string,
-            options.positionals.afterSeparator()[i],
-        );
+    const expected_positionals_after = expected_positionals[5..];
+    const actual_positionals_after = options.positionals.afterSeparator();
+    for (expected_positionals_after, actual_positionals_after) |expected, actual| {
+        try std.testing.expectEqualStrings(expected, actual);
     }
     try std.testing.expectEqual(options.t, false);
 }
