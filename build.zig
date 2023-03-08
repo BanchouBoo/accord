@@ -1,8 +1,7 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    b.addModule(.{
-        .name = "accord",
+    _ = b.addModule("accord", .{
         .source_file = std.Build.FileSource.relative("accord.zig"),
         .dependencies = &[_]std.Build.ModuleDependency{},
     });
