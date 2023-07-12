@@ -43,11 +43,11 @@ pub const Option = struct {
     settings: *const anyopaque,
 
     pub fn getDefault(comptime self: Option) *const ValueType(self.type) {
-        return @ptrCast(*const ValueType(self.type), @alignCast(@alignOf(ValueType(self.type)), self.default));
+        return @ptrCast(@alignCast(self.default));
     }
 
     pub fn getSettings(comptime self: Option) *const OptionSettings(self.type) {
-        return @ptrCast(*const OptionSettings(self.type), @alignCast(@alignOf(OptionSettings(self.type)), self.settings));
+        return @ptrCast(@alignCast(self.settings));
     }
 };
 
@@ -123,7 +123,7 @@ pub fn option(
         .short = short,
         .long = long,
         .type = T,
-        .default = if (T == Flag) &false else @ptrCast(*const anyopaque, &default),
+        .default = if (T == Flag) &false else @ptrCast(&default),
         .settings = &settings,
     };
 }
@@ -136,7 +136,7 @@ fn structField(
     return .{
         .name = name,
         .type = T,
-        .default_value = @ptrCast(?*const anyopaque, default),
+        .default_value = @ptrCast(default),
         .is_comptime = false,
         .alignment = @alignOf(T),
     };
@@ -237,13 +237,13 @@ pub fn parseValue(comptime T: type, comptime default: ?DefaultValueType(T), comp
                 .name => std.meta.stringToEnum(T, string) orelse error.OptionUnexpectedValue,
                 .value => std.meta.intToEnum(T, parseValue(
                     TagT,
-                    if (default) |d| @enumToInt(d) else null,
+                    if (default) |d| @intFromEnum(d) else null,
                     settings,
                     string,
                 ) catch return error.OptionUnexpectedValue) catch error.OptionUnexpectedValue,
                 .both => std.meta.intToEnum(T, parseValue(
                     TagT,
-                    if (default) |d| @enumToInt(d) else null,
+                    if (default) |d| @intFromEnum(d) else null,
                     settings,
                     string,
                 ) catch {
@@ -256,7 +256,7 @@ pub fn parseValue(comptime T: type, comptime default: ?DefaultValueType(T), comp
             var iterator = std.mem.split(u8, string, settings.mask_delimiter);
             while (iterator.next()) |value| {
                 result |= if (T.IS_ENUM)
-                    @enumToInt(try parseValue(T.TYPE, null, settings, value))
+                    @intFromEnum(try parseValue(T.TYPE, null, settings, value))
                 else
                     try parseValue(T.TYPE, null, settings, value);
             }
@@ -264,7 +264,7 @@ pub fn parseValue(comptime T: type, comptime default: ?DefaultValueType(T), comp
                 if (@typeInfo(T.TYPE).Enum.is_exhaustive)
                     std.meta.intToEnum(T.TYPE, result) catch error.OptionUnexpectedValue
                 else
-                    @intToEnum(T.TYPE, result)
+                    @enumFromInt(result)
             else
                 result;
         } else @compileError("Unsupported type '" ++ @typeName(T) ++ "'"),
