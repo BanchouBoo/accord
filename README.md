@@ -89,3 +89,4 @@ would result in the following value:
         - or make it an error for short to be greater than long
 - More and/or customizable acceptable values for bools
     - e.g. yes/no, 1/2, t/f, etc
+- Ability to define custom types, similar to how the custom mask type works but implementable by users without modifying the accord source
