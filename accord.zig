@@ -71,7 +71,7 @@ fn DefaultValueType(comptime T: type) type {
 
 const Field = std.builtin.Type.StructField;
 fn optionSettingsFields(comptime T: type) []const Field {
-    comptime var info = @typeInfo(T);
+    const info = @typeInfo(T);
     switch (info) {
         .Int => return &[1]Field{structField("radix", u8, &@as(u8, 0))},
         .Enum => {
