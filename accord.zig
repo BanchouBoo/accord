@@ -37,7 +37,7 @@ const log = std.log.scoped(.accord);
 
 pub const Option = struct {
     short: u8,
-    long: []const u8,
+    long: [:0]const u8,
     type: type,
     default: *const anyopaque,
     settings: *const anyopaque,
@@ -112,7 +112,7 @@ pub fn OptionSettings(comptime T: type) type {
 
 pub fn option(
     comptime short: u8,
-    comptime long: []const u8,
+    comptime long: [:0]const u8,
     comptime T: type,
     comptime default: DefaultValueType(T),
     comptime settings: OptionSettings(T),
@@ -129,7 +129,7 @@ pub fn option(
 }
 
 fn structField(
-    comptime name: []const u8,
+    comptime name: [:0]const u8,
     comptime T: type,
     comptime default: ?*const T,
 ) std.builtin.Type.StructField {
@@ -148,7 +148,7 @@ pub fn OptionStruct(comptime options: []const Option) type {
 
     for (options, 0..) |opt, i| {
         struct_fields[i] = structField(
-            if (opt.long.len > 0) opt.long else &[1]u8{opt.short},
+            if (opt.long.len > 0) opt.long else &[1:0]u8{opt.short},
             ValueType(opt.type),
             opt.getDefault(),
         );

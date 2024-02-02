@@ -2,12 +2,11 @@ const std = @import("std");
 
 pub fn build(b: *std.Build) void {
     _ = b.addModule("accord", .{
-        .source_file = std.Build.FileSource.relative("accord.zig"),
-        .dependencies = &[_]std.Build.ModuleDependency{},
+        .root_source_file = std.Build.LazyPath.relative("accord.zig"),
     });
 
     const main_tests = b.addTest(.{
-        .root_source_file = std.Build.FileSource.relative("accord.zig"),
+        .root_source_file = std.Build.LazyPath.relative("accord.zig"),
         .target = b.standardTargetOptions(.{}),
         .optimize = b.standardOptimizeOption(.{}),
     });
