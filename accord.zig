@@ -103,7 +103,7 @@ pub fn OptionSettings(comptime T: type) type {
         struct { padding_so_i_can_make_a_non_zero_sized_pointer: u1 = 0 }
     else
         @Type(std.builtin.Type{ .Struct = .{
-            .layout = .Auto,
+            .layout = .auto,
             .fields = fields,
             .decls = &.{},
             .is_tuple = false,
@@ -161,7 +161,7 @@ pub fn OptionStruct(comptime options: []const Option) type {
     );
 
     const struct_info = Type{ .Struct = .{
-        .layout = .Auto,
+        .layout = .auto,
         .fields = &struct_fields,
         .decls = &.{},
         .is_tuple = false,
@@ -212,7 +212,7 @@ pub fn parseValue(comptime T: type, comptime default: ?DefaultValueType(T), comp
         .Array => {
             const ChildT = info.Array.child;
             var result: ValueType(T) = default orelse undefined;
-            var iterator = std.mem.split(u8, string, settings.array_delimiter);
+            var iterator = std.mem.splitSequence(u8, string, settings.array_delimiter);
             comptime var i: usize = 0; // iterate with i instead of iterator so default can be indexed
             inline while (i < result.len) : (i += 1) {
                 // TODO: if token length == 0, grab default value instead
@@ -253,7 +253,7 @@ pub fn parseValue(comptime T: type, comptime default: ?DefaultValueType(T), comp
         },
         .Struct => if (comptime isMask(T)) {
             var result: T.INT_TYPE = 0;
-            var iterator = std.mem.split(u8, string, settings.mask_delimiter);
+            var iterator = std.mem.splitSequence(u8, string, settings.mask_delimiter);
             while (iterator.next()) |value| {
                 result |= if (T.IS_ENUM)
                     @intFromEnum(try parseValue(T.TYPE, null, settings, value))
