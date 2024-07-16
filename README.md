@@ -69,7 +69,7 @@ You can also implement custom no-argument flags by omitting the first argument i
 
 ```zig
 pub const Flag = struct {
-    pub fn accordParse(comptime settings: anytype) bool {
+    pub fn accordParse(comptime settings: anytype) !bool {
         return !settings.default_value;
     }
 };

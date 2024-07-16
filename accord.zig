@@ -224,7 +224,7 @@ pub fn ArrayInterface(comptime T: type) type {
 }
 
 pub const Flag = struct {
-    pub fn accordParse(comptime settings: anytype) bool {
+    pub fn accordParse(comptime settings: anytype) !bool {
         return !settings.default_value;
     }
 };
@@ -384,7 +384,7 @@ pub fn parse(comptime options: []const Option, allocator: std.mem.Allocator, arg
                                 log.err("Option '{s}' does not take an argument!", .{opt_name});
                                 return error.OptionUnexpectedValue;
                             } else {
-                                @field(values, field_name) = Interface.accordParse(opt.getSettings());
+                                @field(values, field_name) = try Interface.accordParse(opt.getSettings());
                                 const next_name = &[1]u8{value_string.?[0]};
                                 const next_value_string = if (value_string.?[1..].len > 0)
                                     value_string.?[1..]
@@ -392,7 +392,7 @@ pub fn parse(comptime options: []const Option, allocator: std.mem.Allocator, arg
                                     null;
                                 try common(false, next_name, next_value_string, values, iterator);
                             }
-                        } else @field(values, field_name) = Interface.accordParse(opt.getSettings());
+                        } else @field(values, field_name) = try Interface.accordParse(opt.getSettings());
                     } else {
                         const vs = value_string orelse (iterator.next() orelse {
                             log.err("Option '{s}' missing argument!", .{opt_name});
