@@ -96,13 +96,14 @@ pub fn EnumInterface(comptime T: type) type {
 const allocator = std.heap.page_allocator;
 var args_iterator = std.process.args();
 const options = try accord.parse(&.{
-    accord.option('s', "string", []const u8, "default", .{}),
-    accord.option('c', "color", u32, 0x000000, .{ .radix = 16 }),
-    accord.option('f', "float", f32, 0.0, .{}),
-    accord.option('m', "mask", accord.Mask(u8), 0, .{}),
-    accord.option('a', "", accord.Flag, false, .{}), // option without long option
-    accord.option(0, "option", accord.Flag, false, .{}), // option without short option
-    accord.option('i', "optionalintarray", [2]?u32, .{ 0, 0 }, .{ .array_delimiter = "%" }),
+                  //short name //long name         //type           //default value   //parse options
+    accord.option('s',         "string",           []const u8,      "default",        .{}),
+    accord.option('c',         "color",            u32,             0x000000,         .{ .radix = 16 }),
+    accord.option('f',         "float",            f32,             0.0,              .{}),
+    accord.option('m',         "mask",             accord.Mask(u8), 0,                .{}),
+    accord.option('a',         "",                 accord.Flag,     false,            .{}), // option without long option
+    accord.option(0,           "option",           accord.Flag,     false,            .{}), // option without short option
+    accord.option('i',         "optionalintarray", [2]?u32,         .{ 0, 0 },        .{ .array_delimiter = "%" }),
 }, allocator, &args_iterator);
 defer options.positionals.deinit(allocator);
 ```
