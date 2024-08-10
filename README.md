@@ -133,3 +133,11 @@ would result in the following value:
     - Ensure short and long prefixes are different
     - If short prefix > long prefix, check short prefix first
         - or make it an error for short to be greater than long
+- Subcommands
+    - Parsable union containing an Option and Subcommand field
+    - Flags before a subcommand use top level flags
+    - Flags after a subcommand apply to the subcommand
+    - Subcommands after -- are considered normal positionals
+    - Subcommand stored as a sub-struct in the parse return struct. Possibly store it's own return value?
+- A way to define help strings per argument and print them all nicely
+- Required arguments
