@@ -128,11 +128,6 @@ would result in the following value:
 ```
 
 ## Possible things to add in the future
-- Definable prefix for short and long arguments, instead of forcing `--`.
-    - This could include an empty prefix, allowing you to do things like `command option value`
-    - Ensure short and long prefixes are different
-    - If short prefix > long prefix, check short prefix first
-        - or make it an error for short to be greater than long
 - Subcommands
     - Parsable union containing an Option and Subcommand field
     - Flags before a subcommand use top level flags
