@@ -15,7 +15,7 @@ NOTE: Accord was made for use with zig master, it is not guaranteed to and likel
 - Strings (`[]const u8`)
 - Signed and unsigned integers
 - Floats
-- Booleans (*must* have `true` or `false` as the value)
+- Booleans
 - Flags with no arguments via `accord.Flag`, when a flag argument is used it will return the opposite of its default value
 - Enums by name, value, or both
 - Optionals of any of these types (except `Flag`)
