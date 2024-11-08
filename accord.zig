@@ -11,7 +11,7 @@ const StructField = std.builtin.Type.StructField;
 pub fn MergeStructs(comptime types: []const type) type {
     var fields: []const StructField = &.{};
     for (types) |T| {
-        outer: for (@typeInfo(T).Struct.fields) |t_field| {
+        outer: for (@typeInfo(T).@"struct".fields) |t_field| {
             for (fields) |result_field| {
                 if (std.mem.eql(u8, result_field.name, t_field.name)) {
                     if (result_field.type != t_field.type) {
@@ -26,7 +26,7 @@ pub fn MergeStructs(comptime types: []const type) type {
             fields = fields ++ &[1]StructField{t_field};
         }
     }
-    return @Type(std.builtin.Type{ .Struct = .{
+    return @Type(std.builtin.Type{ .@"struct" = .{
         .layout = .auto,
         .fields = fields,
         .decls = &.{},
@@ -37,12 +37,12 @@ pub fn MergeStructs(comptime types: []const type) type {
 pub fn isInterface(comptime T: type) bool {
     if (@hasDecl(T, "accordParse")) {
         const parse_info = @typeInfo(@TypeOf(@field(T, "accordParse")));
-        comptime assert(parse_info == .Fn);
-        const ReturnType = parse_info.Fn.return_type orelse unreachable;
+        comptime assert(parse_info == .@"fn");
+        const ReturnType = parse_info.@"fn".return_type orelse unreachable;
         comptime assert(ReturnType != void);
         const return_type_info = @typeInfo(ReturnType);
-        if (return_type_info == .ErrorUnion) {
-            comptime assert(return_type_info.ErrorUnion.payload != void);
+        if (return_type_info == .error_union) {
+            comptime assert(return_type_info.error_union.payload != void);
         }
         return true;
     }
@@ -51,7 +51,7 @@ pub fn isInterface(comptime T: type) bool {
 
 pub fn interfaceIsFlag(comptime T: type) bool {
     comptime assert(isInterface(T));
-    const fn_info = @typeInfo(@TypeOf(@field(T, "accordParse"))).Fn;
+    const fn_info = @typeInfo(@TypeOf(@field(T, "accordParse"))).@"fn";
     return fn_info.params.len == 1 and fn_info.params[0].type != []const u8;
 }
 
@@ -74,10 +74,10 @@ pub fn InterfaceValueType(comptime T: type) type {
     comptime assert(isInterface(T));
 
     const parse_info = @typeInfo(@TypeOf(@field(T, "accordParse")));
-    const ResultType = parse_info.Fn.return_type orelse unreachable;
+    const ResultType = parse_info.@"fn".return_type orelse unreachable;
     const result_type_info = @typeInfo(ResultType);
-    return if (result_type_info == .ErrorUnion)
-        result_type_info.ErrorUnion.payload
+    return if (result_type_info == .error_union)
+        result_type_info.error_union.payload
     else
         ResultType;
 }
@@ -91,12 +91,12 @@ pub fn GetInterface(comptime T: type) type {
 
     const info = @typeInfo(T);
     switch (info) {
-        .Int => return IntegerInterface(T),
-        .Float => return FloatInterface(T),
-        .Enum => return if (isInterface(T)) T else return EnumInterface(T),
-        .Optional => return OptionalInterface(T),
-        .Array => return ArrayInterface(T),
-        .Struct, .Union, .Opaque => {
+        .int => return IntegerInterface(T),
+        .float => return FloatInterface(T),
+        .@"enum" => return if (isInterface(T)) T else return EnumInterface(T),
+        .optional => return OptionalInterface(T),
+        .array => return ArrayInterface(T),
+        .@"struct", .@"union", .@"opaque" => {
             if (isInterface(T)) {
                 return T;
             } else {
@@ -159,7 +159,7 @@ pub fn FloatInterface(comptime T: type) type {
 }
 
 pub fn EnumInterface(comptime T: type) type {
-    const Tag = @typeInfo(T).Enum.tag_type;
+    const Tag = @typeInfo(T).@"enum".tag_type;
     return struct {
         pub const AccordParseSettings = MergeStructs(&.{
             struct {
@@ -181,7 +181,7 @@ pub fn EnumInterface(comptime T: type) type {
 }
 
 pub fn OptionalInterface(comptime T: type) type {
-    const Child = @typeInfo(T).Optional.child;
+    const Child = @typeInfo(T).optional.child;
     return struct {
         pub const AccordParseSettings = MergeStructs(&.{
             struct {
@@ -202,7 +202,7 @@ pub fn OptionalInterface(comptime T: type) type {
 }
 
 pub fn ArrayInterface(comptime T: type) type {
-    const Child = @typeInfo(T).Array.child;
+    const Child = @typeInfo(T).array.child;
     return struct {
         pub const AccordParseSettings = MergeStructs(&.{
             struct {
@@ -232,12 +232,12 @@ pub const Flag = struct {
 pub fn Mask(comptime T: type) type {
     const type_info = @typeInfo(T);
     comptime assert(switch (type_info) {
-        .Int, .Enum => true,
+        .int, .@"enum" => true,
         else => false,
     });
 
-    const is_enum = type_info == .Enum;
-    const Int = if (is_enum) type_info.Enum.tag_type else T;
+    const is_enum = type_info == .@"enum";
+    const Int = if (is_enum) type_info.@"enum".tag_type else T;
 
     return struct {
         pub const AccordParseSettings = MergeStructs(&.{
@@ -255,7 +255,7 @@ pub fn Mask(comptime T: type) type {
                 result |= if (is_enum) @intFromEnum(value) else value;
             }
             return if (is_enum)
-                if (type_info.Enum.is_exhaustive)
+                if (type_info.@"enum".is_exhaustive)
                     std.meta.intToEnum(T, result) catch error.OptionUnexpectedValue
                 else
                     @enumFromInt(result)
@@ -350,7 +350,7 @@ pub fn OptionStruct(comptime options: []const Option) type {
         null,
     );
 
-    const struct_info = std.builtin.Type{ .Struct = .{
+    const struct_info = std.builtin.Type{ .@"struct" = .{
         .layout = .auto,
         .fields = &struct_fields,
         .decls = &.{},
