@@ -89,6 +89,7 @@ pub fn GetInterface(comptime T: type) type {
         else => {},
     }
 
+    @setEvalBranchQuota(10000);
     const info = @typeInfo(T);
     switch (info) {
         .int => return IntegerInterface(T),
@@ -327,7 +328,7 @@ fn structField(
     return .{
         .name = name,
         .type = T,
-        .default_value = @ptrCast(default),
+        .default_value_ptr = @ptrCast(default),
         .is_comptime = false,
         .alignment = @alignOf(T),
     };
