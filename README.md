@@ -120,7 +120,7 @@ would result in the following value:
     mask = 3
     a = true
     option = false
-    intarray = { null, 23 }
+    optionalintarray = { null, 23 }
     positionals.items = { "command", "positional1", "positional2", "positional3", "--option", "positional4", "positional5" }
     positionals.beforeSeparator() = { "command", "positional1", "positional2", "positional3" }
     positionals.afterSeparator() = { "--option", "positional4", "positional5" }
